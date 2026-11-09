@@ -15,13 +15,15 @@ A two-tier guard on shell commands. Design informed by [Dicklesworthstone/destru
 
 **DENY** is a hard block, not clearable by approving the prompt in-session:
 
-`rm -rf` (and nested forms via `bash -c`, `xargs`, loops), `Remove-Item` with `-Recurse` or `-Force`, `find -delete`, `rsync --delete`, `git clean -f`, `git reset --hard`, whole-tree `git checkout .` and `git restore .`, `del /s`, `rd /q`, `robocopy /MIR`, `shutil.rmtree`, `shred`, `Clear-RecycleBin`, `mkfs`, `format`, `dd of=`, and PowerShell `-EncodedCommand`, which cannot be screened because it cannot be inspected.
+`rm -rf` (and nested forms via `bash -c`, `xargs`, loops), `Remove-Item` with `-Recurse` or `-Force`, deletion calls with a recursive argument (R `unlink(x, recursive = TRUE)`, Node `fs.rm(x, { recursive: true })`, .NET `Delete($true)` and `[IO.Directory]::Delete(x, $true)`), `find -delete`, `rsync --delete`, `git clean -f`, `git reset --hard`, whole-tree `git checkout .` and `git restore .`, `del /s`, `rd /q`, `robocopy /MIR`, `shutil.rmtree`, `shred`, `Clear-RecycleBin`, `mkfs`, `format`, `dd of=`, and PowerShell `-EncodedCommand`, which cannot be screened because it cannot be inspected.
 
 **ASK** forces a manual approval prompt even in auto-accept modes:
 
-single-target deletions (`rm`, `del`, `unlink`, `Remove-Item`, `os.remove`, `fs.rm`, `file.remove`, `fs::file_delete`, `.Delete()`) and recoverable-but-destructive git operations (`git stash drop`, `git push --force`, `git branch -D`, single-file `git checkout --`).
+single-target deletions (`rm`, `del`, `unlink`, `Remove-Item`, `os.remove`, `fs.rm`, `file.remove`, `fs::file_delete`, `.Delete()`, `[IO.File]::Delete()`), recoverable-but-destructive git operations (`git stash drop`, `git push --force`, `git branch -D`, single-file `git checkout --`), and destructive SQL (`DROP DATABASE`, `DROP SCHEMA`, `DROP TABLE`, `TRUNCATE TABLE`).
 
-**PASS** covers everything else, plus an explicit whitelist: `git clean -n`, `rm --help`, and any command invoking `trash.ps1`.
+**PASS** covers everything else, plus an explicit whitelist: `git clean -n`, `rm --help`, and a call to `trash.ps1`.
+
+The whitelist applies per command segment, split on `;`, `&&`, `||`, `|`, `&`, and newlines. A whitelisted segment is dropped and the rest of the line is still checked, so `git clean -n && git clean -fd` is denied. A segment that contains command substitution (`$(...)` or backticks) is never whitelisted.
 
 The deny tier exists because an auto-accept session plus one bad glob is enough to lose a directory tree. `Remove-Item` on Windows bypasses the Recycle Bin entirely, so there is no cheap undo. The guard makes the recoverable path the only path the agent can take on its own.
 
